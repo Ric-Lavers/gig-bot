@@ -1,4 +1,8 @@
 [
-  { "name": "Alex", "phone": "+15551234567" },
-  { "name": "Jordan", "phone": "+15557654321" }
+  { "name": "Ric", "phone": "+61421000554" },
+  { "name": "Vinny", "phone": "+61477684747" },
+  { "name": "Jimmy", "phone": "+61403690703" },
+  { "name": "Nick Fanning", "phone": "+61418832758" },
+  { "name": "Joey Bullock", "phone": "+61427754953" },
+  { "name": "Minimal Damage", "phone": "+61404094101" }
 ]
