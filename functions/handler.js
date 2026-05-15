@@ -8,7 +8,7 @@ async function getDJs(uri) {
   await mongoClient.connect();
   return mongoClient.db('djcards').collection('artists')
     .find({}, {
-      projection: { djName: 1, genres: 1, stats: 1, skills: 1, socials: 1, _id: 0 },
+      projection: { djName: 1, genres: 1, stats: 1, skills: 1, socials: 1, editedPhoto: 1, photo: 1, _id: 0 },
     })
     .toArray();
 }
@@ -38,6 +38,14 @@ function formatDJs(djs) {
   }).join('\n\n');
 }
 
+function findDJPhoto(djs, name) {
+  if (!name) return null;
+  const needle = name.toLowerCase().trim();
+  const match = djs.find(dj => dj.djName.toLowerCase().includes(needle) || needle.includes(dj.djName.toLowerCase()));
+  if (!match) return null;
+  return match.editedPhoto || match.photo || null;
+}
+
 function systemPrompt(ctx, djInfo) {
   return `You are the unofficial voice of ${ctx.PARTY_NAME} — ${ctx.PARTY_DATE} at ${ctx.PARTY_VENUE}.
 
@@ -65,6 +73,9 @@ Behaviour:
 •⁠  ⁠RSVP no → lightly persuasive at most; never guilt-heavy
 •⁠  ⁠Anything else → stay grounded, socially aware, and concise
 
+Photos:
+•⁠  ⁠We have a photo for every DJ. When someone asks for a photo, or when showing a photo would add to the conversation (e.g. they just asked about a specific DJ), end your reply with [PHOTO:DJ Name] using the exact DJ name from the list. Only include one photo tag per reply. Never mention that you're sending a photo — just send it.
+
 Rules:
 •⁠  ⁠Replies must stay under 2 sentences
 •⁠  ⁠No emojis unless they use one first
@@ -80,6 +91,7 @@ Channel the energy of Gilles Peterson, early NTS, independent radio energy. Calm
 
 const RSVP_YES = /\b(yes|yeah|yep|yup|coming|i'm in|count me in|i'll be there|absolutely|definitely|for sure)\b/i;
 const RSVP_NO = /\b(no|nope|can't|cannot|not coming|won't make it|can't make it|busy|skip)\b/i;
+const PHOTO_TAG = /\[PHOTO:([^\]]+)\]/i;
 
 exports.handler = async function (context, event, callback) {
   const twiml = new Twilio.twiml.MessagingResponse();
@@ -124,7 +136,13 @@ exports.handler = async function (context, event, callback) {
     temperature: 0.85,
   });
 
-  const reply = completion.choices[0].message.content.trim();
+  let reply = completion.choices[0].message.content.trim();
+
+  // Extract photo tag if present
+  const photoMatch = reply.match(PHOTO_TAG);
+  const photoUrl = photoMatch ? findDJPhoto(djs, photoMatch[1]) : null;
+  reply = reply.replace(PHOTO_TAG, '').trim();
+
   history.push({ role: 'assistant', content: reply });
 
   // Persist state to Twilio Sync
@@ -135,6 +153,8 @@ exports.handler = async function (context, event, callback) {
     await sync.documents.create({ uniqueName: docName, data });
   }
 
-  twiml.message(reply);
+  const msg = twiml.message(reply);
+  if (photoUrl) msg.media(photoUrl);
+
   callback(null, twiml);
 };
