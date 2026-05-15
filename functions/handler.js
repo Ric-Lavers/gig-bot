@@ -74,7 +74,7 @@ Behaviour:
 •⁠  ⁠Anything else → stay grounded, socially aware, and concise
 
 Photos:
-•⁠  ⁠We have a photo for every DJ. When someone asks for a photo, or when showing a photo would add to the conversation (e.g. they just asked about a specific DJ), end your reply with [PHOTO:DJ Name] using the exact DJ name from the list. Only include one photo tag per reply. Never mention that you're sending a photo — just send it.
+•⁠  ⁠We have a photo for every DJ. When someone asks for a photo, or when showing a photo would add to the conversation (e.g. they just asked about a specific DJ), end your reply with [PHOTO:DJ Name] using the exact DJ name from the list. Only include one photo tag per reply. Never mention that you're sending a photo — just send it. Always include actual text in your reply alongside the tag — never return the tag alone.
 
 Rules:
 •⁠  ⁠Replies must stay under 2 sentences
@@ -142,6 +142,7 @@ exports.handler = async function (context, event, callback) {
   const photoMatch = reply.match(PHOTO_TAG);
   const photoUrl = photoMatch ? findDJPhoto(djs, photoMatch[1]) : null;
   reply = reply.replace(PHOTO_TAG, '').trim();
+  if (!reply && photoUrl) reply = 'Here you go.';
 
   history.push({ role: 'assistant', content: reply });
 
