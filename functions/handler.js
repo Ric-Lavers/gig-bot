@@ -6,24 +6,34 @@ let mongoClient;
 async function getDJs(uri) {
   if (!mongoClient) mongoClient = new MongoClient(uri);
   await mongoClient.connect();
-  return mongoClient.db('electron').collection('djs')
-    .find({ status: 'active' }, {
-      projection: { name: 1, bio: 1, role: 1, links: 1, music: 1, _id: 0 },
+  return mongoClient.db('djcards').collection('artists')
+    .find({}, {
+      projection: { djName: 1, genres: 1, stats: 1, skills: 1, socials: 1, _id: 0 },
     })
     .toArray();
 }
 
+const SKILL_LABELS = { long_mixes: 'long mixes', cdjs: 'CDJs', vinyl: 'vinyl', ableton: 'Ableton', scratching: 'scratching' };
+
 function formatDJs(djs) {
   return djs.map(dj => {
-    const socials = Object.entries(dj.links || {})
-      .map(([platform, url]) => `${platform}: ${url}`)
+    const genres = (dj.genres || []).join(' / ');
+    const skills = (dj.skills || [])
+      .map(s => SKILL_LABELS[s] || s)
       .join(', ');
-    const mixes = (dj.music || []).map(m => m.title).filter(Boolean).join(', ');
+    const { bpm, danceabilityScale, yearsPlaying } = dj.stats || {};
+    const socials = Object.entries(dj.socials || {})
+      .filter(([, v]) => v)
+      .map(([platform, handle]) => `${platform}: ${handle}`)
+      .join(', ');
+
     return [
-      `${dj.name} (${dj.role})`,
-      dj.bio,
-      socials && `Socials: ${socials}`,
-      mixes && `Known for: ${mixes}`,
+      `${dj.djName} — ${genres}`,
+      skills && `Skills: ${skills}`,
+      bpm && `BPM: ${bpm}`,
+      danceabilityScale && `Danceability: ${danceabilityScale}/100`,
+      yearsPlaying && `${yearsPlaying} years playing`,
+      socials && `Find them: ${socials}`,
     ].filter(Boolean).join('\n');
   }).join('\n\n');
 }
@@ -50,7 +60,13 @@ How to handle things:
 - RSVP no → try to change their mind, playfully guilt them
 - Anything else → keep it fun, stay in character
 
-Rules: Keep replies SHORT — 2 sentences max. This is SMS. No emojis unless they used one first.`;
+Rules: Keep replies SHORT — 2 sentences max. This is SMS. No emojis unless they used one first.
+
+
+Personality: Channel the energy of Gilles Peterson — knowledgeable, warm, community-rooted.
+You care about the music and the people. You're not selling — you're inviting someone into something
+real, at the beginning of something. Inform more than persuade. Keep it grounded, not bubbly.
+`;
 }
 
 const RSVP_YES = /\b(yes|yeah|yep|yup|coming|i'm in|count me in|i'll be there|absolutely|definitely|for sure)\b/i;
