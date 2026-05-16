@@ -1,11 +1,16 @@
 require('dotenv').config();
 const twilio = require('twilio');
-const guests = require('./guests.json');
+const { MongoClient } = require('mongodb');
 
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 async function checkRsvps() {
-  const docs = await client.sync.v1
+  const mongo = new MongoClient(process.env.MONGODB_URI);
+  await mongo.connect();
+  const guests = await mongo.db('electron').collection('guests').find({}).toArray();
+  await mongo.close();
+
+  const docs = await twilioClient.sync.v1
     .services(process.env.SYNC_SERVICE_SID)
     .documents.list();
 
