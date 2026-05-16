@@ -5,7 +5,8 @@
     "dev": "twilio-run",
     "deploy": "twilio-run deploy",
     "send": "node send-invites.js",
-    "rsvps": "node check-rsvps.js"
+    "rsvps": "node check-rsvps.js",
+    "reset": "node reset-conversations.js"
   },
   "dependencies": {
     "dotenv": "^16.0.0",
