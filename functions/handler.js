@@ -17,9 +17,11 @@ async function getUpcomingEvents(uri, djNames) {
   if (!mongoClient) mongoClient = new MongoClient(uri);
   await mongoClient.connect();
   const now = new Date();
-  const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const aestOffset = 10 * 60 * 60 * 1000;
+  const startOfTodayAEST = new Date(Math.floor((now.getTime() + aestOffset) / 86400000) * 86400000 - aestOffset);
+  const twoWeeks = new Date(startOfTodayAEST.getTime() + 14 * 24 * 60 * 60 * 1000);
   const events = await mongoClient.db('electron').collection('events')
-    .find({ startDate: { $gte: now, $lte: twoWeeks } }, {
+    .find({ startDate: { $gte: startOfTodayAEST, $lte: twoWeeks } }, {
       projection: { title: 1, artists: 1, startDate: 1, location: 1, price: 1, url: 1, _id: 0 },
     })
     .sort({ startDate: 1 })
