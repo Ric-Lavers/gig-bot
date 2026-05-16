@@ -13,6 +13,43 @@ async function getDJs(uri) {
     .toArray();
 }
 
+async function getUpcomingEvents(uri, djNames) {
+  if (!mongoClient) mongoClient = new MongoClient(uri);
+  await mongoClient.connect();
+  const now = new Date();
+  const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const events = await mongoClient.db('electron').collection('events')
+    .find({ startDate: { $gte: now, $lte: twoWeeks } }, {
+      projection: { title: 1, artists: 1, startDate: 1, location: 1, price: 1, url: 1, _id: 0 },
+    })
+    .sort({ startDate: 1 })
+    .toArray();
+
+  const djNamesLower = djNames.map(n => n.toLowerCase());
+  const withFlag = events.map(e => {
+    const hasCardDJ = (e.artists || []).some(a =>
+      djNamesLower.some(dj => a.toLowerCase().includes(dj) || dj.includes(a.toLowerCase()))
+    );
+    return { ...e, hasCardDJ };
+  });
+
+  // Card DJ events first, then the rest — cap total at 20
+  const priority = withFlag.filter(e => e.hasCardDJ);
+  const rest = withFlag.filter(e => !e.hasCardDJ).slice(0, 20 - priority.length);
+  return [...priority, ...rest];
+}
+
+function formatEvents(events) {
+  if (!events.length) return 'No upcoming events found in the next two weeks.';
+  return events.map(e => {
+    const date = new Date(e.startDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    const artists = (e.artists || []).join(', ');
+    const price = e.price ? `$${e.price}` : 'free/unknown price';
+    const flag = e.hasCardDJ ? ' ★ (features a DJ from our community)' : '';
+    return `${e.title}${flag}\n  ${date} · ${e.location} · ${price}\n  Artists: ${artists}`;
+  }).join('\n\n');
+}
+
 const SKILL_LABELS = { long_mixes: 'long mixes', cdjs: 'CDJs', vinyl: 'vinyl', ableton: 'Ableton', scratching: 'scratching' };
 
 function formatDJs(djs) {
@@ -46,7 +83,7 @@ function findDJPhoto(djs, name) {
   return match.editedPhoto || match.photo || null;
 }
 
-function systemPrompt(ctx, djInfo) {
+function systemPrompt(ctx, djInfo, eventsInfo) {
   return `You are the unofficial voice of ${ctx.PARTY_NAME} — ${ctx.PARTY_DATE} at ${ctx.PARTY_VENUE}.
 
 Your role is to make the night feel culturally real, musically credible, and socially magnetic without sounding promotional.
@@ -62,8 +99,11 @@ Facts you can share:
 What's happening:
 ${ctx.PARTY_SURPRISES}
 
-DJs:
+DJs playing at our event:
 ${djInfo}
+
+Upcoming Sydney gigs (next 2 weeks):
+${eventsInfo}
 
 Behaviour:
 •⁠  ⁠Directions/address → give them plainly, with a sense of local familiarity
@@ -71,6 +111,7 @@ Behaviour:
 •⁠  ⁠What's on → reveal one detail at a time; leave space for curiosity
 •⁠  ⁠RSVP yes → warm acknowledgement, not celebration
 •⁠  ⁠RSVP no → lightly persuasive at most; never guilt-heavy
+•⁠  ⁠Gig recommendations → early in conversation, ask what kind of music they're into before recommending. Our Botany View event is always the primary recommendation. Other Sydney gigs are secondary — mention them naturally if relevant to their taste. Events marked ★ feature someone from our DJ community and should be recommended with extra warmth.
 •⁠  ⁠Anything else → stay grounded, socially aware, and concise
 
 Photos:
@@ -104,7 +145,11 @@ exports.handler = async function (context, event, callback) {
     Promise.resolve(context.getTwilioClient()),
   ]);
 
-  const sync = twilioClient.sync.v1.services(context.SYNC_SERVICE_SID);
+  const djNames = djs.map(d => d.djName);
+  const [upcomingEvents, sync] = await Promise.all([
+    getUpcomingEvents(context.MONGODB_URI, djNames),
+    Promise.resolve(twilioClient.sync.v1.services(context.SYNC_SERVICE_SID)),
+  ]);
 
   // Load existing conversation state
   let history = [];
@@ -129,7 +174,7 @@ exports.handler = async function (context, event, callback) {
   const completion = await openai.chat.completions.create({
     model: 'gpt-3.5-turbo',
     messages: [
-      { role: 'system', content: systemPrompt(context, formatDJs(djs)) },
+      { role: 'system', content: systemPrompt(context, formatDJs(djs), formatEvents(upcomingEvents)) },
       ...history.slice(-8),
     ],
     max_tokens: 160,
